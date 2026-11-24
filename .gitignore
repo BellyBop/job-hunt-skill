@@ -1,0 +1,8 @@
+# Personal data: never share these
+user/
+applications-*/
+archive/
+
+# Build output and dependencies
+dist/
+tools/node_modules/

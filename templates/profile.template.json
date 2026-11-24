@@ -1,0 +1,51 @@
+{
+  "_note": "Your job hunt settings. The skill reads this every run. Setup ('set up job hunt') writes it; edit it any time. Search terms, sources, auto-drop rules and locations live in the Google Sheet instead.",
+  "name": "Full Name",
+  "filePrefix": "SURNAME_FIRSTNAME",
+  "timezone": "Australia/Sydney",
+  "locale": "en_AU",
+  "country": "Australia",
+  "spreadsheetId": "",
+  "baseResumeFileOnSites": "",
+  "level": "junior",
+  "_levelOptions": "graduate | junior | mid | senior | any. Sets which default Auto-drop rules and sources are switched on.",
+  "experience": "One line on your experience, e.g. '3 years as a registered nurse' or 'final-year accounting student'.",
+  "targets": {
+    "summary": "One line: what you're looking for, in priority order.",
+    "groups": [
+      {
+        "label": "Main",
+        "roles": "The roles you want most, e.g. registered nurse, junior accountant, marketing coordinator, software engineer",
+        "resumeAngle": "How the resume summary should be pitched for these roles"
+      },
+      {
+        "label": "Also",
+        "roles": "Related roles you'd also take",
+        "resumeAngle": "How to pitch the summary for these instead"
+      }
+    ]
+  },
+  "screening": {
+    "greenFlags": ["Things that make a role a good fit"],
+    "redFlags": ["Things that make a role a poor fit"]
+  },
+  "availability": {
+    "workRights": "",
+    "currentlyEmployed": false,
+    "emailRule": "Never state a start date or notice period in contact emails."
+  },
+  "contactEmails": true,
+  "coverLetter": {
+    "salutation": "Dear Hiring Manager,",
+    "intro": "Here is what caught my eye about your job posting and how I think my experience can benefit your team:",
+    "close": "Thank you for considering my application and I look forward to hearing from you soon.",
+    "signoff": "Kind Regards,"
+  },
+  "writingRules": [
+    "No em dashes",
+    "No apologising for gaps or underselling yourself",
+    "Never invent experience",
+    "Name real gaps plainly and say how they'd be closed"
+  ],
+  "listStyle": "short"
+}

@@ -1,0 +1,51 @@
+{
+  "_levels": {
+    "_note": "Rules and sources listed here are only switched on (Enabled Y) for the profile levels given. Everything else starts on. A level of 'any' (or a missing level) switches all of these off; the user can turn any back on in the sheet.",
+    "Senior title": ["graduate", "junior"],
+    "3+ years required": ["graduate", "junior"],
+    "2 years required": ["graduate", "junior"],
+    "Students only": ["graduate", "junior"],
+    "Too junior": ["mid", "senior"],
+    "GradConnection": ["graduate", "junior"],
+    "Prosple": ["graduate", "junior"]
+  },
+  "_note": "Starting content for a new user's Job Hunt Tracker sheet. tools/tracker-setup.js turns this into one Google Sheets batch. Search terms, target companies and locations are filled in during setup from the user's answers.",
+  "Auto-drop": [
+    ["Y", "Senior title", "Title", "senior, lead, principal, manager, head of, architect, staff engineer", "Drop", "Not entry level"],
+    ["Y", "3+ years required", "Ad text", "3+ years, 4+ years, 5+ years, minimum 3 years, minimum of 3 years, at least 3 years, 5 years experience", "Drop", "Experience gate"],
+    ["Y", "2 years required", "Ad text", "2+ years, minimum 2 years, minimum of 2 years, at least 2 years, 2 years experience", "Flag", "Change to Drop if these never work out"],
+    ["Y", "Too junior", "Title", "graduate, junior, intern, internship, trainee, entry level, cadet, apprentice", "Drop", "Below your level"],
+    ["Y", "Students only", "Any", "current students, currently enrolled, penultimate year, final year students, internship for students", "Drop", "For people who've finished studying"],
+    ["Y", "Existing clearance required", "Ad text", "NV1, NV2, negative vetting, existing security clearance, current security clearance, must hold a baseline, PV clearance", "Drop", "Switch off if you hold a clearance"],
+    ["Y", "Unpaid or commission only", "Any", "unpaid, commission only, volunteer, equity only", "Drop", "Not paid work"],
+    ["Y", "Short contract", "Ad text", "2 week contract, 4 week contract, 1 month contract, short-term project, temp assignment", "Flag", "Check it's worth it"]
+  ],
+  "Sources": [
+    ["Y", "SEEK", "Both", "Chrome (or built-in browser signed out). Keyword searches from 'Search terms' AND a browse of the whole relevant classification, sorted by date", "Quick Apply. Saved resume cap is 10."],
+    ["Y", "LinkedIn Jobs", "Both", "Chrome, signed in. Filter to your experience level and Past week", "Easy Apply max per run is in Config (terms of use)."],
+    ["Y", "Indeed (site)", "Both", "Chrome, au.indeed.com. Read full ads here", "Indeed Apply."],
+    ["Y", "Indeed connector", "Search", "search_jobs only, one call at a time, max calls in Config", "Avoid get_job_details (hard rate limit); read the ad on the Indeed site instead."],
+    ["Y", "Gmail job alerts", "Search", "from:(indeed OR seek OR linkedin OR jora OR gradconnection OR prosple) newer_than:3d", "A bonus, not a full feed."],
+    ["Y", "Jora", "Search", "Chrome, au.jora.com. Aggregates many boards and careers pages", "May block automation. Stop if it does, never work around it."],
+    ["Y", "GradConnection", "Search", "au.gradconnection.com, your field, graduate and entry level (for early career)", "Apply links go to the employer."],
+    ["Y", "Prosple", "Search", "au.prosple.com, your field, graduate and entry level (for early career)", "Apply links go to the employer."],
+    ["Y", "I Work for NSW", "Both", "iworkfor.nsw.gov.au", "NSW gov. Account needed to apply; you sign in. Swap for your state's site if not in NSW."],
+    ["Y", "APSJobs", "Search", "apsjobs.gov.au, APS levels that match your experience", "Federal; many roles need 'ability to obtain' a clearance."],
+    ["Y", "CareerOne", "Search", "careerone.com.au", ""],
+    ["Y", "Adzuna", "Search", "adzuna.com.au aggregator", "Good for odd titles that keyword boards miss."],
+    ["Y", "Wellfound", "Both", "wellfound.com, Australia and remote", "Startups. Needs your sign-in to apply."],
+    ["Y", "Target company careers pages", "Both", "Check each enabled row of 'Target companies'", "Many local roles never reach the big boards."],
+    ["N", "Workforce Australia", "Search", "workforceaustralia.gov.au", "Blocks automated access. Enable only if that changes."]
+  ],
+  "Config": [
+    ["locations", "", "Where to search (filled in at setup)"],
+    ["daily_target", 10, "New roles per run that pass screening"],
+    ["posted_within_days", 2, "Search window; widen to 7 if under target"],
+    ["shortlist_expiry_days", 7, "Shortlisted roles older than this become Expired"],
+    ["follow_up_after_days", 10, "Flag applications with no reply after this many days"],
+    ["linkedin_easy_apply_max", 5, "Per run"],
+    ["indeed_connector_max_calls", 6, "Per run"],
+    ["last_follow_up_check", "", "Gmail is scanned from this date on the next check (blank = last 14 days)"],
+    ["next_id", "=MAX(0,MAX(Jobs!A:A))+1", "Calculated. The ID to give the next new role"]
+  ]
+}

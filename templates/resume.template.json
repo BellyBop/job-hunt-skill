@@ -1,0 +1,31 @@
+{
+  "_note": "Your base resume, the only copy. Setup fills this from your existing resume; edit it any time. gen.js builds every tailored resume and cover letter from it. Leave a section empty ([] or \"\") to leave it off the resume.",
+  "name": "Full Name",
+  "contact": "Suburb, STATE, Postcode | 0400 000 000 | you@example.com | linkedin.com/in/your-profile",
+  "phone": "0400 000 000",
+  "email": "you@example.com",
+  "summary": "Two or three sentences: who you are, your strongest relevant experience, and the kind of role you want.",
+  "experience": [
+    {
+      "title": "Job title, Employer, Location",
+      "dates": "Month Year - Current",
+      "text": "What you did and the result, with numbers where you have them."
+    }
+  ],
+  "education": [
+    { "title": "Qualification", "detail": "Institution, Month Year" }
+  ],
+  "skills": [
+    "Languages: ...",
+    "Tools & Platforms: ..."
+  ],
+  "strengths": [
+    ["Strength", "One line showing it in action."]
+  ],
+  "additional": "",
+  "references": "Available on request.",
+  "defaultAvailability": "One sentence on work rights and when you can start, used in every cover letter.",
+  "coverLetterFacts": [
+    "True facts the cover letters may use, e.g. citizenship, your proudest project, notice period."
+  ]
+}
