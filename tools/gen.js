@@ -20,7 +20,7 @@ const USER_DIR = path.join(__dirname, '..', 'user');
 const readUser = (f) => {
   const p = path.join(USER_DIR, f);
   if (!fs.existsSync(p)) { console.error(`Missing ${p}. Run setup first (say "set up job hunt").`); process.exit(2); }
-  return JSON.parse(fs.readFileSync(p, 'utf8'));
+  return require('./profile').readJsonFile(p);
 };
 const R = readUser('resume.json');
 readUser('profile.json'); // exits with a setup hint if missing
@@ -129,17 +129,64 @@ function matchReport(job) {
   const hit = kws.filter((k) => text.includes(norm(k)));
   const missing = kws.filter((k) => !hit.includes(k));
   const share = kws.length ? hit.length / kws.length : null;
-  // Names, tools, qualifications and acronyms in the tailored resume that appear nowhere in resume.json
-  // (e.g. "Azure", "ITIL", "365"): the user should confirm each one is true.
-  const tailored = [job.summary, ...job.skills, ...(job.experience || []).map((e) => e.text)].join(' ');
-  const claims = new Set();
-  for (const m of tailored.matchAll(/(^|[^.!?:]\s)([A-Z][A-Za-z0-9+#.]*[A-Za-z0-9+#]|[A-Za-z]*\d[A-Za-z0-9+#]*)/g)) claims.add(m[2]);
-  const unbacked = [...claims].filter((w) => {
-    const n = norm(w).trim();
-    return n.length > 1 && !STOP.has(n) && !BASE.includes(` ${n} `) && !BASE.includes(` ${n}s `) && !BASE.includes(` ${n.replace(/s$/, '')} `);
+  const inBase = (w) => { const n = norm(w).trim(); return !n || BASE.includes(` ${n} `) || BASE.includes(` ${n}s `) || BASE.includes(` ${n.replace(/s$/, '')} `); };
+  // Single-word ad keywords (e.g. "ITIL", "Kubernetes"); multi-word phrases are matched by the keyword table instead.
+  const kwWords = new Set(kws.map((k) => norm(k).trim()).filter((k) => k && !k.includes(' ')));
+  // Words from the target role and company (job.ref, e.g. "SEEK - Junior DevOps Engineer - Cogito") describe the job, not a claim.
+  const refWords = new Set(norm(job.ref || '').trim().split(' '));
+  // Strong list: names, tools, qualifications, acronyms and numbers that appear nowhere in resume.json
+  // (e.g. "Azure", "ITIL", "365", "Kubernetes"), including at the start of a sentence, plus any ad keyword
+  // that was added without being in the base resume. Each must be confirmed true or removed.
+  // Skills lines are lists of claims, so any new word there counts as a claim, whatever its case.
+  const tailoredParts = [[job.summary, false], ...job.skills.map((s) => [s, true]), ...(job.experience || []).map((e) => [e.text, false])];
+  const strong = new Set();
+  const soft = new Set();
+  for (const [part, isSkill] of tailoredParts) {
+    const sentences = String(part).split(/(?<=[.!?:;])\s+/);
+    for (const s of sentences) {
+      const tokens = s.match(/[A-Za-z0-9][A-Za-z0-9+#.$%,'-]*[A-Za-z0-9+#%]|[A-Za-z0-9]/g) || [];
+      tokens.forEach((raw, idx) => {
+        const t = raw.replace(/[.,]+$/, '');
+        const lower = norm(t).trim();
+        if (!lower || lower.length < 2 || STOP.has(lower) || inBase(t)) return;
+        if (lower.split(' ').every((w) => refWords.has(w))) return;
+        const hasDigit = /\d/.test(t);
+        const allCaps = /^[A-Z0-9+#]{2,}$/.test(t);
+        const midCaps = idx > 0 && /^[A-Z]/.test(t);
+        const startCaps = idx === 0 && /^[A-Z]/.test(t) && !lower.split(" ").every((w) => COMMON.has(w));
+        const isKeyword = kwWords.has(lower);
+        const skillWord = isSkill && lower.length > 2 && !lower.split(" ").every((w) => COMMON.has(w));
+        if (hasDigit || allCaps || midCaps || startCaps || isKeyword || skillWord) strong.add(t);
+        else if (lower.length > 2) soft.add(lower);
+      });
+    }
+  }
+  // Reworded experience lines: numbers that changed, and words added or removed compared with the original.
+  const numRe = /\$?\d[\d,.]*\s?(?:k|m|%|\+)?/gi;
+  const normNum = (s) => s.toLowerCase().replace(/[\s,$]/g, '');
+  const rewrites = (job.experience || []).map((e) => {
+    const before = R.experience[e.index].text;
+    const beforeNums = new Set((before.match(numRe) || []).map(normNum));
+    const afterNums = (e.text.match(numRe) || []).map(normNum);
+    const changedNums = [...new Set(afterNums.filter((n) => !beforeNums.has(n)))];
+    const bw = new Set(norm(before).trim().split(' ').filter((w) => !STOP.has(w)));
+    const aw = new Set(norm(e.text).trim().split(' ').filter((w) => !STOP.has(w)));
+    return { index: e.index, changedNums, added: [...aw].filter((w) => !bw.has(w)), removed: [...bw].filter((w) => !aw.has(w)) };
   });
-  return { kws, hit, missing, share, unbacked };
+  for (const r of rewrites) for (const n of r.changedNums) strong.add(n);
+  return { kws, hit, missing, share, unbacked: [...strong], soft: [...soft].filter((w) => ![...strong].some((s) => norm(s).trim() === w)), rewrites };
 }
+
+// Ordinary words that often start a resume sentence; not treated as claims when capitalised at a sentence start.
+const COMMON = new Set(('graduate recent recently keen motivated passionate experienced detail dedicated reliable '
+  + 'built build developed develop designed design delivered deliver managed manage led lead created create improved improve '
+  + 'worked supported support provided provide completed complete produced produce engaged engage followed follow navigated '
+  + 'comfortable confident proven hands seeking looking eager enthusiastic organised organized friendly professional '
+  + 'currently skilled solid good great quick fast strong bachelor diploma certificate degree computer software web '
+  + 'languages tools platforms databases operating system systems user algorithms quality testing networking security '
+  + 'full stack end customer client team clear written verbal communication problem solving time technical '
+  + 'writes write uses use holds hold works brings bring takes take learns learn enjoys enjoy thrives thrive '
+  + 'self-starter self starter adaptable curious organised hardworking hard-working approachable collaborative').split(' '));
 
 function reportMarkdown(job, m) {
   const target = RO.keywordTarget ?? 0.8;
@@ -155,10 +202,18 @@ function reportMarkdown(job, m) {
   else L.push('| Change | Why | Backed by (from your resume) |', '|---|---|---|', ...job.changes.map((c) => `| ${c.what} | ${c.why} | ${c.evidence} |`), '');
   if ((job.experience || []).length) {
     L.push('## Experience lines reworded', '');
-    for (const e of job.experience) L.push(`**${R.experience[e.index].title}**`, '', `- Before: ${R.experience[e.index].text}`, `- After: ${e.text}`, '');
+    for (const e of job.experience) {
+      const r = m.rewrites.find((x) => x.index === e.index) || { changedNums: [], added: [], removed: [] };
+      L.push(`**${R.experience[e.index].title}**`, '', `- Before: ${R.experience[e.index].text}`, `- After: ${e.text}`);
+      if (r.changedNums.length) L.push(`- **Numbers not in the original: ${r.changedNums.join(', ')}.** Numbers must never change; fix this before using the resume.`);
+      if (r.added.length) L.push(`- Words added: ${r.added.join(', ')}`);
+      if (r.removed.length) L.push(`- Words removed: ${r.removed.join(', ')}`);
+      L.push('');
+    }
   }
   L.push('## Check these are true', '');
-  L.push(m.unbacked.length ? `These words are in the tailored resume but not in your base resume: **${m.unbacked.join(', ')}**. Make sure each one honestly describes your experience, or remove it.` : 'Every word in the tailored summary, skills and experience appears in your base resume.', '');
+  L.push(m.unbacked.length ? `These names, tools, numbers or ad keywords are in the tailored resume but not in your base resume: **${m.unbacked.join(', ')}**. Each one must honestly describe your experience, or be removed.` : 'No names, tools, numbers or ad keywords were added that aren\'t in your base resume.', '');
+  if (m.soft.length) L.push(`Other new wording (usually fine, but skim it): ${m.soft.join(', ')}`, '');
   return L.join('\n');
 }
 
@@ -233,7 +288,7 @@ function fail(errs) {
   if (resumeErrs.length) fail(resumeErrs);
 
   if (args[0] === '--base') {
-    const outDir = args[1] || '.';
+    const outDir = args[1] || path.join(__dirname, '..', 'user'); // default: user/ (git-ignored), never the project folder
     fs.mkdirSync(outDir, { recursive: true });
     const file = path.join(outDir, `${PREFIX}_-_RESUME.docx`);
     fs.writeFileSync(file, await Packer.toBuffer(resume({ summary: R.summary, skills: R.skills })));
@@ -251,7 +306,7 @@ function fail(errs) {
   const onlyIdx = args.indexOf('--only');
   const only = onlyIdx > -1 ? new Set(args[onlyIdx + 1].split(',').map((s) => s.trim())) : null;
 
-  let jobs = JSON.parse(fs.readFileSync(jobsFile, 'utf8'));
+  let jobs = require('./profile').readJsonFile(path.resolve(jobsFile));
   if (!Array.isArray(jobs)) fail(['jobs.json must be an array']);
   if (only) {
     const missing = [...only].filter((c) => !jobs.some((j) => j.fileCompany === c));
@@ -261,7 +316,7 @@ function fail(errs) {
 
   const errs = jobs.flatMap(validate);
   const seen = new Set();
-  for (const j of jobs) { if (seen.has(j.fileCompany)) errs.push(`duplicate fileCompany ${j.fileCompany}`); seen.add(j.fileCompany); }
+  for (const j of jobs) { if (seen.has(j.fileCompany)) errs.push(`duplicate fileCompany ${j.fileCompany}: two roles at the same company need different names, e.g. ${j.fileCompany}_FULL_STACK and ${j.fileCompany}_SOFTWARE_ENGINEER`); seen.add(j.fileCompany); }
   if (errs.length) fail(errs);
   if (checkOnly) { console.log(`OK: ${jobs.length} job(s) pass validation`); return; }
 

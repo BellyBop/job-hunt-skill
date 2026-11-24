@@ -31,6 +31,19 @@ const MIGRATIONS = {
 
 const isObj = (v) => v && typeof v === 'object' && !Array.isArray(v);
 
+// Reads a JSON file; on a typo, prints a plain message with the line number instead of a stack trace, and exits.
+function readJsonFile(file) {
+  const text = fs.readFileSync(file, 'utf8');
+  try { return JSON.parse(text.replace(/^﻿/, '')); } catch (e) {
+    const pos = Number((String(e.message).match(/position (\d+)/) || [])[1]);
+    const line = Number.isFinite(pos) ? text.slice(0, pos).split('\n').length : null;
+    const name = path.relative(ROOT, file).split(path.sep).join('/');
+    console.error(`${name} has a mistake${line ? ` on line ${line}` : ''}: ${String(e.message).replace(/^.*?:\s*/, '')}`);
+    console.error('Common causes: a missing or extra comma, a missing quote, or a missing } or ]. Fix it, or say "set up job hunt" to rebuild it.');
+    process.exit(2);
+  }
+}
+
 function fillMissing(target, defaults, prefix, added) {
   for (const [k, v] of Object.entries(defaults)) {
     if (k.startsWith('_')) continue;
@@ -46,7 +59,7 @@ function fillMissing(target, defaults, prefix, added) {
 }
 
 function upgradeObject(profile) {
-  const template = JSON.parse(fs.readFileSync(TEMPLATE, 'utf8'));
+  const template = readJsonFile(TEMPLATE);
   const p = JSON.parse(JSON.stringify(profile));
   const from = Number(p.profileVersion || 1);
   const ran = [];
@@ -60,15 +73,15 @@ function upgradeObject(profile) {
 // Used by gen.js: the profile with defaults filled in, without writing anything.
 function load() {
   if (!fs.existsSync(PROFILE)) return null;
-  return upgradeObject(JSON.parse(fs.readFileSync(PROFILE, 'utf8'))).profile;
+  return upgradeObject(readJsonFile(PROFILE)).profile;
 }
 
-module.exports = { load, upgradeObject, PROFILE_VERSION };
+module.exports = { load, upgradeObject, readJsonFile, PROFILE_VERSION };
 
 if (require.main === module) {
   const cmd = process.argv[2] || 'check';
   if (!fs.existsSync(PROFILE)) { console.error('No user/profile.json yet. Run setup first (say "set up job hunt").'); process.exit(2); }
-  const raw = JSON.parse(fs.readFileSync(PROFILE, 'utf8'));
+  const raw = readJsonFile(PROFILE);
   const { profile, added, ran, from } = upgradeObject(raw);
   const changed = added.length || ran.length || from !== PROFILE_VERSION;
   if (!changed) { console.log(`Profile is up to date (version ${PROFILE_VERSION}).`); process.exit(0); }

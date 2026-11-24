@@ -19,27 +19,65 @@ function needles() {
   const list = [p.spreadsheetId, p.filePrefix, p.name, r.name, r.email, r.phone];
   // Each part of the contact line (suburb, LinkedIn URL, email, phone), but not short or generic bits.
   if (r.contact) list.push(...r.contact.split('|').map((s) => s.trim()));
-  if (r.name) list.push(...r.name.split(/\s+/).filter((w) => w.length >= 4));
-  // Anything that also appears in the shipped templates is a placeholder, not personal (e.g. "Full Name").
-  let templates = '';
+  if (r.name) list.push(...r.name.split(/\s+/).filter((w) => w.length >= 3));
+  // Values left exactly as the template's placeholders (e.g. "Full Name", "Full", "you@example.com") aren't personal.
+  const placeholders = new Set();
+  const collect = (v) => {
+    if (typeof v === 'string') {
+      placeholders.add(v.trim().toLowerCase());
+      for (const part of v.split('|')) placeholders.add(part.trim().toLowerCase());
+    } else if (v && typeof v === 'object') Object.values(v).forEach(collect);
+  };
   for (const t of ['templates/resume.template.json', 'templates/profile.template.json']) {
-    try { templates += fs.readFileSync(path.join(ROOT, t), 'utf8').toLowerCase(); } catch { /* not there */ }
+    try {
+      const tj = JSON.parse(fs.readFileSync(path.join(ROOT, t), 'utf8'));
+      collect(tj);
+      if (tj.name) tj.name.split(/\s+/).forEach((w) => placeholders.add(w.toLowerCase()));
+    } catch { /* not there */ }
   }
-  return [...new Set(list.filter((s) => typeof s === 'string' && s.length >= 4 && !templates.includes(s.toLowerCase())))];
+  return [...new Set(list.filter((s) => typeof s === 'string' && s.trim().length >= 3 && !placeholders.has(s.trim().toLowerCase())))];
 }
 
+// Whole-word, case-insensitive match, so part of a name never matches inside a longer ordinary word.
+const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const wholeWord = (s) => new RegExp(`(?<![A-Za-z0-9])${escapeRe(s.trim())}(?![A-Za-z0-9])`, 'i');
+
 const BLOCKED_PATHS = [/^user\//, /^applications-[^/]*\//, /^archive\//, /^interviews\//];
+// Generated documents can't be read for personal details (they're binary), and they hold a whole resume or
+// cover letter, so they're never shared wherever they are. Same for match reports.
+const BLOCKED_FILES = [/\.(docx?|pdf|odt|rtf|pages)$/i, /(^|\/)MATCH_[^/]*\.md$/i];
+
+// Phone numbers compared by digits only, so "0400 111 222", "0400111222" and "+61 400 111 222" all match.
+const phoneCore = (s) => {
+  let d = String(s).replace(/\D/g, '');
+  if (d.startsWith('61')) d = d.slice(2);
+  if (d.startsWith('0')) d = d.slice(1);
+  return d;
+};
+function phoneCores() {
+  const r = readJson('user/resume.json');
+  const parts = [r.phone, ...(r.contact ? r.contact.split('|') : [])];
+  const cores = parts.filter((s) => typeof s === 'string' && (s.match(/\d/g) || []).length >= 8 && !/@/.test(s)).map(phoneCore);
+  return [...new Set(cores.filter((c) => c.length >= 8 && !/^0+$/.test(c) && c !== phoneCore('0400 000 000')))];
+}
 
 function check(files, read) {
-  const n = needles();
+  const n = needles().map((s) => [s, wholeWord(s)]);
+  const phones = phoneCores();
   const found = [];
   for (const f of files) {
     const rel = f.replace(/\\/g, '/');
     if (BLOCKED_PATHS.some((re) => re.test(rel))) { found.push(`${rel}: personal folder, must not be shared`); continue; }
+    if (BLOCKED_FILES.some((re) => re.test(rel))) { found.push(`${rel}: generated document or match report, must not be shared`); continue; }
     let text;
     try { text = read(f); } catch { continue; }
-    if (text.includes('\u0000')) continue; // binary
-    for (const s of n) if (text.toLowerCase().includes(s.toLowerCase())) found.push(`${rel}: contains "${s}"`);
+    if (text.includes('\u0000')) { found.push(`${rel}: binary file, can't be checked for personal details, so it isn't shared`); continue; }
+    for (const [s, re] of n) if (re.test(text)) found.push(`${rel}: contains "${s}"`);
+    if (phones.length) {
+      for (const m of text.match(/\+?\d[\d\s().-]{6,}\d/g) || []) {
+        if (phones.includes(phoneCore(m))) { found.push(`${rel}: contains your phone number ("${m.trim()}")`); break; }
+      }
+    }
   }
   return found;
 }

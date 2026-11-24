@@ -38,12 +38,14 @@ Created during setup and linked by `spreadsheetId` in `user/profile.json`. Claud
 Tabs:
 - **Jobs**: one row per role. The ID is permanent and is the number you use in "apply to 52". Status: Shortlisted / Applied / Skipped / Dropped / Expired. Stage (after applying): Awaiting reply, Acknowledged, Action needed, Assessment, Phone screen, Interview, Final interview, Offer, Rejected, Withdrawn, No reply (closed). Rows are coloured by stage and status. **Follow-up due** (column R) is a formula: Applied + follow_up_after_days.
 - **Follow-ups**: calculated live from Jobs: a summary line, then Action needed, In progress, Follow-up due (with days waiting) and Shortlist past expiry.
-- **Stats**: calculated live from Jobs: overview (roles seen, applied, replied, reply rate, progressed, interview rate, offers, rejected), roles found and applied for each of the last 8 weeks with a column chart, and applied / replied / progressed / reply rate by role group (Type) and by platform (Applied via). "Replied" means a real reply (action needed, assessment, interview, offer or rejection), not an automatic acknowledgement.
+- **Read me**: a guide to every tab, status, stage and row colour. Column headings on Jobs and the settings tabs also have hover notes.
+- **Stats**: calculated live from Jobs (plus eight charts, fed by the "Chart data" block from row 64): overview (roles seen, applied, replied, reply rate, progressed, interview rate, offers, rejected), roles found and applied for each of the last 8 weeks with a column chart, and applied / replied / progressed / reply rate by role group (Type) and by platform (Applied via). "Replied" means a real reply (action needed, assessment, interview, offer or rejection), not an automatic acknowledgement.
+- **Form answers**: your standard answers for application forms and account sign-ups (Field, Answer, Notes, Group): name, contact details, street address, right to work, notice period, salary expectation, licences and checks, referees, voluntary diversity questions. Claude fills forms from it and only asks about fields that are blank or say "Ask me". Edit or add rows any time. Never put passwords here.
 - **Auto-drop**: screening rules. Set Enabled to N to switch one off, change Action between Drop and Flag, or add rows. Keywords are comma separated; any one matching triggers the rule. "Match in" is Title, Ad text, Company or Any.
 - **Sources**: where to search and apply. Enabled Y/N.
 - **Search terms**: keywords searched on each site, each tagged with a group from the profile. Enabled Y/N.
 - **Target companies**: employers whose careers pages are checked directly.
-- **Config**: locations, daily target, search window, expiry and follow-up days, per-run limits, last reply check, next_id (a formula), min_salary and min_salary_action (Flag or Drop), and tracker_version.
+- **Config**: locations, daily target, search window, expiry and follow-up days, per-run limits, last reply check, next_id (a formula), min_salary and min_salary_action (Flag or Drop), tracker_version, and account_passwords ("Chrome suggests" or "I type it": how passwords are set when a site needs a new account; Claude never types or sees them).
 
 Rules that keep the formulas working:
 - New rows are written to the next empty row (never appended or inserted). The formulas use whole-column references, so they survive anyway, but appended rows pick up the header's styling.
@@ -52,13 +54,19 @@ Rules that keep the formulas working:
 ### tracker-setup.js
 
 ```
-node tools/tracker-setup.js <outFile>                                   new tracker
-node tools/tracker-setup.js --upgrade <fromVersion> <outFile> [configSheetId]   upgrade an older one
+node tools/tracker-setup.js <outFile> --part 1|2|3                       new tracker, sent as three calls in order
+node tools/tracker-setup.js --upgrade <fromVersion> <outFile> --config-row <firstEmptyConfigRow> [--meta <sheets.json>]   upgrade an older one
 ```
 
-**Upgrades.** The tracker's version is the `tracker_version` row in Config (missing means version 1). `--upgrade` writes only what that version is missing: version 1 → 2 adds the Stats tab and the min_salary, min_salary_action and tracker_version rows. Pass the Config tab's `sheetId` if it isn't 105 (trackers made by setup use 105). The skill runs this automatically at the start of a run. To add a feature in a future version, bump `TRACKER_VERSION`, add its default rows to `tracker-defaults.json`, and add a `from < N` block to the upgrade section.
+**Upgrades.** The tracker's version is the `tracker_version` row in Config (missing means version 1). `--upgrade` writes only what that version is missing:
+- 1 → 2: the Stats tab, and the min_salary, min_salary_action and tracker_version rows (written at `--config-row`, the first empty row of Config, so rows the user added aren't overwritten).
+- 2 → 3: the easier-to-read layout. On Jobs: four saved filter views (Active, To decide, Applications, Everything, newest first), no text spilling into the next cell, 24px rows, short dates ("24 Nov 26"), ID, Company and Role frozen, light row lines, and Contact, Contact email and Last update folded into collapsed column groups. On the settings tabs: long text wraps.
+- 3 → 4: a **Read me** tab first (every tab, status, stage and row colour explained), hover notes on every column heading of Jobs and the settings tabs, and seven more Stats charts (pipeline, status, where applications stand, fit, reply rate by role group, applications and replies by platform, applications over time). Their data lives in a "Chart data" block at `Stats!A64:N76`. It also rewrites the group and platform table formulas so they only look at rows 5 to 62.
+- 4 → 5: the **Form answers** tab (fields only; the skill fills the answers from the resume and profile) and the account_passwords Config row with its dropdown (written at `--config-row`).
 
-**New trackers.** Writes `{"requests": [...]}` for one `update_spreadsheet` call on a brand-new blank spreadsheet (made with Drive `create_file`, mime type `application/vnd.google-apps.spreadsheet`, first tab sheetId 0). It builds every tab, header, formula, dropdown, colour and column width, using `templates/tracker-defaults.json` for the starting rules and `user/profile.json` for locale, timezone, the Type dropdown (the profile's group labels) and `level`. The `_levels` map in tracker-defaults.json lists the rules and sources that only start switched on for certain levels: "Senior title", the experience gates, "Students only" and the graduate boards for graduate and junior; "Too junior" for mid and senior; none of them for "any". Search terms, target companies and locations are filled in afterwards from the user's answers.
+`--meta` is a saved `get_spreadsheet` result (fields `sheets.properties`); it maps tab titles to their sheetIds, which differ on trackers that weren't made by setup. Without it the setup IDs are used (Jobs 0, Config 105 and so on). After an upgrade from version 2 or later, the skill sets the existing tracker_version cell to the new version. The skill runs this automatically at the start of a run. To add a feature in a future version, bump `TRACKER_VERSION`, add its default rows to `tracker-defaults.json`, and add a `from < N` block to the upgrade section.
+
+**New trackers.** Writes `{"requests": [...]}` for a brand-new blank spreadsheet, split into three parts sent as three `update_spreadsheet` calls in order (`--part 1`: tabs, formulas, dropdowns, colours and settings; `--part 2`: Stats and layout; `--part 3`: extra charts, Read me, Form answers and notes; with no `--part`, all three in one large batch). The spreadsheet is made (made with Drive `create_file`, mime type `application/vnd.google-apps.spreadsheet`, first tab sheetId 0). It builds every tab, header, formula, dropdown, colour and column width, using `templates/tracker-defaults.json` for the starting rules and `user/profile.json` for locale, timezone, the Type dropdown (the profile's group labels) and `level`. The `_levels` map in tracker-defaults.json lists the rules and sources that only start switched on for certain levels: "Senior title", the experience gates, "Students only" and the graduate boards for graduate and junior; "Too junior" for mid and senior; none of them for "any". Search terms, target companies and locations are filled in afterwards from the user's answers.
 
 ## Doc generator (gen.js)
 
@@ -68,7 +76,7 @@ Builds the tailored resume (.docx), cover letter (.docx) and plain-text cover le
 node gen.js --check <jobs.json>                    validate only
 node gen.js <jobs.json> <outDir>                   build all
 node gen.js <jobs.json> <outDir> --only WSP,METSO  build some (use on the day you submit)
-node gen.js --base <outDir>                        build the untailored base resume
+node gen.js --base [outDir]                        build the untailored base resume (default: user/)
 ```
 
 - File names start with the profile's `filePrefix`, e.g. `SURNAME_FIRSTNAME_-_RESUME_-_ACME.docx`.
@@ -116,7 +124,7 @@ node tools/leak-check.js --staged    check files staged for commit
 node tools/leak-check.js <folder>    check every file in a folder
 ```
 
-Looks for the name, email, phone, address, LinkedIn URL, file prefix and sheet ID from `user/profile.json` and `user/resume.json`, and blocks any file inside `user/`, `applications-*/`, `archive/` or `interviews/`. `.githooks/pre-commit` runs it before every commit once `git config core.hooksPath .githooks` is set (setup does this). package.js runs it on the zip contents.
+Looks for the name, email, address, LinkedIn URL, file prefix and sheet ID from `user/profile.json` and `user/resume.json` (whole words only, so a name never matches inside an ordinary word), and the phone number in any format (compared by digits, so spaces and +61 don't matter). It blocks any file inside `user/`, `applications-*/`, `archive/` or `interviews/`, any generated document (.docx, .pdf and similar) or `MATCH_` report wherever it is, and any other binary file, since those can't be checked. `.gitignore` also ignores .docx, .pdf and `MATCH_` files everywhere. `.githooks/pre-commit` runs it before every commit once `git config core.hooksPath .githooks` is set (setup does this). package.js runs it on the zip contents.
 
 ## Sharing (package.js)
 

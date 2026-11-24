@@ -9,3 +9,8 @@ tools/node_modules/
 
 # Interview prep notes
 interviews/
+
+# Generated documents and reports: never share these, wherever they end up
+*.docx
+*.pdf
+MATCH_*.md

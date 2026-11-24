@@ -44,12 +44,22 @@ Applicant tracking systems rank resumes by how closely they match the ad. For ev
 Missing keywords you don't have stay missing: they're real gaps, and Claude lowers the fit rating rather than pretending.
 
 ## Your tracker (Google Sheet)
-- **Jobs**: every role ever seen, with a permanent ID, pay, status, stage, follow-up date and notes.
+The first tab, **Read me**, explains every tab, status, stage and row colour, and hovering over any column heading shows what that column means.
+
+- **Jobs**: every role ever seen, with a permanent ID, pay, status, stage, follow-up date and notes. To see just what matters, use a saved **filter view** (Data → Filter views, or the filter icon in the toolbar): **Active**, **To decide**, **Applications** or **Everything**, all newest first. Filter views never change the real order of the rows. Contact details and Last update are folded away; click the **+** above the columns to show them. Click any cell to read text that's cut off.
 - **Follow-ups**: updates itself: action needed, interviews, follow-ups due, shortlists going stale.
-- **Stats**: updates itself: reply rate, interview rate, roles found and applied per week (with a chart), and which role groups and job sites actually get replies.
+- **Stats**: updates itself: reply and interview rates, plus eight charts: roles found and applied per week, your pipeline (seen → kept → applied → replied → interview → offer), all roles by status, where applications stand, fit of the roles kept, reply rate by role group, applications and replies by platform, and applications over time.
+- **Form answers**: your standard answers for application forms and account sign-ups (contact details, street address, right to work, notice period, salary expectation, licences, referees, voluntary diversity questions). Claude fills forms from it and only asks you about blank fields or ones you've marked "Ask me", then offers to save your reply here. Edit it any time. Passwords never go here.
 - **Auto-drop**: your screening rules. Turn them on or off, switch between Drop and Flag, add keywords.
 - **Sources**, **Search terms**, **Target companies**: where and what to search. Turn rows on or off.
-- **Config**: locations, daily target, follow-up days, per-run limits, and **min_salary** (the lowest yearly pay you'll consider; roles below it are flagged or dropped, your choice).
+- **Config**: locations, daily target, follow-up days, per-run limits, and **min_salary** (the lowest yearly pay you'll consider; roles below it are flagged or dropped, your choice), and **account_passwords** (see below).
+
+### Sites that need an account
+Workday, PageUp, iCIMS and many government and company sites make you create an account before you can apply. Claude asks before creating one, fills in the sign-up form from your Form answers tab, and then, depending on **account_passwords** in Config:
+- **Chrome suggests** (default): Claude clicks into the password box and you click Chrome's **Use suggested password**. Chrome makes a strong password and saves it to your Google Password Manager.
+- **I type it**: you type the password yourself.
+
+Claude never types, sees or stores your passwords, and you click any verification email or code. The site is noted on the role so the next application there is just a sign-in.
 
 Don't sort the Jobs tab in place, delete its rows, or type in Follow-up due, Follow-ups or Stats. Use the filter buttons instead.
 
