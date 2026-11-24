@@ -1,0 +1,4 @@
+#!/bin/sh
+# Blocks commits that contain personal details (name, email, phone, sheet ID, address)
+# or files from user/, applications-*/, archive/ or interviews/.
+node tools/leak-check.js --staged || exit 1

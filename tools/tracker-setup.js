@@ -1,7 +1,11 @@
-// Builds the Google Sheets batch that turns a brand-new blank spreadsheet into a Job Hunt Tracker.
+// Builds the Google Sheets batch that turns a brand-new blank spreadsheet into a Job Hunt Tracker,
+// or upgrades an older tracker to the current version.
 //
-//   node tracker-setup.js [outFile]
+//   node tracker-setup.js [outFile]                       new tracker
+//   node tracker-setup.js --upgrade <fromVersion> <outFile> [configSheetId]   add what's new since that version
+//     configSheetId: the Config tab's sheetId if it isn't 105 (read it with get_spreadsheet, fields sheets.properties)
 //
+// TRACKER_VERSION is written to the Config tab (key tracker_version). Version 1 had no tracker_version row.
 // Reads ../templates/tracker-defaults.json and ../user/profile.json (locale, timezone, group labels).
 // Prints (or writes) {"requests": [...]} for ONE update_spreadsheet call on a spreadsheet just
 // created with Drive create_file (contentMimeType application/vnd.google-apps.spreadsheet),
@@ -85,6 +89,96 @@ const FOLLOW = [
   ],
 ];
 
+const TRACKER_VERSION = 2;
+const STATS_ID = 778;
+const REPLIED = '^(Action needed|Assessment|Phone screen|Interview|Final interview|Offer|Rejected)$';
+
+// Stats tab: overview, applications per week (with a chart), and reply rates by role group and by platform.
+function statsRequests(index) {
+  const S = STATS_ID;
+  const r = [];
+  r.push({ addSheet: { properties: { sheetId: S, title: 'Stats', index, gridProperties: { rowCount: 200, columnCount: 20 } } } });
+  const applied = 'Jobs!I:I="Applied"';
+  const sumIf = (re, extra = '') => `=SUMPRODUCT((${applied})${extra}*REGEXMATCH(Jobs!J:J&"","${re}"))`;
+  const groupCols = (col, keyCol) => {
+    // keyCol: Jobs column to group by (D = role group, M = applied via)
+    const k = `Jobs!${keyCol}:${keyCol}`;
+    const list = `FILTER(${col}5:${col},${col}5:${col}<>"")`;
+    const map = (body) => `=IF(${col}5="None",,MAP(${list},LAMBDA(g,${body})))`;
+    return [
+      `=IFERROR(SORT(UNIQUE(FILTER(${k},${applied},${k}<>""))),"None")`,
+      map(`COUNTIFS(${k},g,Jobs!I:I,"Applied")`),
+      map(`SUMPRODUCT((${k}=g)*(${applied})*REGEXMATCH(Jobs!J:J&"","${REPLIED}"))`),
+      map(`SUMPRODUCT((${k}=g)*(${applied})*REGEXMATCH(Jobs!J:J&"","${PROGRESS}"))`),
+    ];
+  };
+  const g = groupCols('H', 'D');
+  const p = groupCols('N', 'M');
+  const rate = (col, a, b) => `=ARRAYFORMULA(IF(LEN(${col}5:${col})*(${col}5:${col}<>"None"),IFERROR(${b}5:${b}/${a}5:${a},0),))`;
+  const overview = [
+    ['Roles seen', '=COUNT(Jobs!A:A)'],
+    ['Shortlisted now', '=COUNTIF(Jobs!I:I,"Shortlisted")'],
+    ['Applied', '=COUNTIF(Jobs!I:I,"Applied")'],
+    ['Replied (not just auto replies)', sumIf(REPLIED)],
+    ['Reply rate', '=IFERROR(B8/B7,0)'],
+    ['Progressed (assessment or interview)', sumIf(PROGRESS)],
+    ['Interview rate', '=IFERROR(B10/B7,0)'],
+    ['Offers', '=COUNTIF(Jobs!J:J,"Offer")'],
+    ['Rejected', '=COUNTIF(Jobs!J:J,"Rejected")'],
+  ];
+  const weeks = [7, 6, 5, 4, 3, 2, 1, 0].map((k, i) => {
+    const row = 5 + i;
+    return [`=TODAY()-WEEKDAY(TODAY(),3)-${7 * k}`, `=COUNTIFS(Jobs!K:K,">="&D${row},Jobs!K:K,"<"&D${row}+7)`, `=COUNTIFS(Jobs!L:L,">="&D${row},Jobs!L:L,"<"&D${row}+7)`];
+  });
+  const grid = [
+    ['Stats'],
+    ['Calculated live from the Jobs tab. "Replied" counts real replies (action needed, assessment, interview, offer or rejection), not automatic acknowledgements.'],
+    ['Overview', '', '', 'Applications per week', '', '', '', 'By role group', '', '', '', '', '', 'By platform applied on'],
+    ['Measure', 'Value', '', 'Week starting', 'Found', 'Applied', '', 'Group', 'Applied', 'Replied', 'Progressed', 'Reply rate', '', 'Platform', 'Applied', 'Replied', 'Progressed', 'Reply rate'],
+  ];
+  for (let i = 0; i < 9; i++) {
+    const row = [...(overview[i] || ['', '']), ''];
+    row.push(...(weeks[i] || ['', '', '']), '');
+    if (i === 0) row.push(...g, rate('H', 'I', 'J'), '', ...p, rate('N', 'O', 'P'));
+    grid.push(row);
+  }
+  r.push(writeRows(S, grid));
+  r.push({ repeatCell: { range: range(S, 0, 1), cell: { userEnteredFormat: { textFormat: { bold: true, fontSize: 12 } } }, fields: 'userEnteredFormat.textFormat.bold,userEnteredFormat.textFormat.fontSize' } });
+  r.push({ repeatCell: { range: range(S, 1, 2), cell: { userEnteredFormat: { textFormat: { italic: true, foregroundColorStyle: { rgbColor: { red: 0.4, green: 0.45, blue: 0.43 } } } } }, fields: 'userEnteredFormat.textFormat.italic,userEnteredFormat.textFormat.foregroundColorStyle' } });
+  r.push({ repeatCell: { range: range(S, 2, 3), cell: { userEnteredFormat: { textFormat: { bold: true, fontSize: 11, foregroundColorStyle: { rgbColor: TEAL } } } }, fields: 'userEnteredFormat.textFormat.bold,userEnteredFormat.textFormat.fontSize,userEnteredFormat.textFormat.foregroundColorStyle' } });
+  [[0, 2], [3, 6], [7, 12], [13, 18]].forEach(([a, b]) => r.push(headerFmt(S, a, b, 3)));
+  const pct = (r0, r1, c) => ({ repeatCell: { range: range(S, r0, r1, c, c + 1), cell: { userEnteredFormat: { numberFormat: { type: 'PERCENT', pattern: '0%' } } }, fields: 'userEnteredFormat.numberFormat' } });
+  r.push(pct(8, 9, 1), pct(10, 11, 1), pct(4, undefined, 11), pct(4, undefined, 17));
+  r.push({ repeatCell: { range: range(S, 4, 12, 3, 4), cell: { userEnteredFormat: { numberFormat: { type: 'DATE', pattern: 'd mmm' } } }, fields: 'userEnteredFormat.numberFormat' } });
+  r.push({ updateSheetProperties: { properties: { sheetId: S, gridProperties: { frozenRowCount: 4 }, tabColorStyle: { rgbColor: { red: 0.25, green: 0.55, blue: 0.85 } } }, fields: 'gridProperties.frozenRowCount,tabColorStyle' } });
+  r.push(width(S, 0, 1, 260), width(S, 1, 2, 80), width(S, 2, 3, 20), width(S, 3, 6, 95), width(S, 6, 7, 20), width(S, 7, 8, 160), width(S, 8, 12, 85), width(S, 12, 13, 20), width(S, 13, 14, 170), width(S, 14, 18, 85));
+  const src = (c) => ({ sourceRange: { sources: [range(S, 3, 12, c, c + 1)] } });
+  r.push({ addChart: { chart: {
+    spec: { title: 'Roles found and applied per week', basicChart: { chartType: 'COLUMN', legendPosition: 'BOTTOM_LEGEND', headerCount: 1,
+      axis: [{ position: 'BOTTOM_AXIS', title: 'Week starting' }, { position: 'LEFT_AXIS', title: 'Roles' }],
+      domains: [{ domain: src(3) }], series: [{ series: src(4), targetAxis: 'LEFT_AXIS' }, { series: src(5), targetAxis: 'LEFT_AXIS' }] } },
+    position: { overlayPosition: { anchorCell: { sheetId: S, rowIndex: 14, columnIndex: 3 }, widthPixels: 560, heightPixels: 300 } },
+  } } });
+  return r;
+}
+
+// --upgrade <fromVersion>: only what an older tracker is missing.
+if (process.argv[2] === '--upgrade') {
+  const from = Number(process.argv[3] || 1);
+  const outFile = process.argv[4];
+  const CONFIG = process.argv[5] ? Number(process.argv[5]) : ID.Config;
+  const up = [];
+  if (from < 2) {
+    up.push(...statsRequests(2));
+    // Config rows added in v2. Version 1 trackers have 10 rows (header + 9 keys), so these go in rows 11-13.
+    up.push(writeRows(CONFIG, D.Config.filter((row) => ['min_salary', 'min_salary_action', 'tracker_version'].includes(row[0])), 10));
+  }
+  up.push(writeRows(CONFIG, [['tracker_version', TRACKER_VERSION, 'Set by the skill. Used to add new features to older trackers']], 12));
+  const o = JSON.stringify({ requests: up });
+  if (outFile) { fs.writeFileSync(outFile, o); console.log(`Wrote ${up.length} upgrade requests (${o.length} bytes) to ${outFile}`); } else console.log(o);
+  process.exit(0);
+}
+
 const req = [];
 req.push({ updateSpreadsheetProperties: { properties: { locale: P.locale || 'en_AU', timeZone: P.timezone || 'Australia/Sydney' }, fields: 'locale,timeZone' } });
 req.push({ updateSheetProperties: { properties: { sheetId: 0, title: 'Jobs', gridProperties: { rowCount: 2000, columnCount: 21 } }, fields: 'title,gridProperties.rowCount,gridProperties.columnCount' } });
@@ -142,6 +236,8 @@ req.push(dropdown(ID['Auto-drop'], 2, ['Title', 'Ad text', 'Company', 'Any']), d
 req.push(dropdown(ID['Search terms'], 2, TYPES, false));
 const lastCheckRow = D.Config.findIndex((r) => r[0] === 'last_follow_up_check') + 1;
 req.push({ repeatCell: { range: range(ID.Config, lastCheckRow, lastCheckRow + 1, 1, 2), cell: { userEnteredFormat: { numberFormat: { type: 'DATE', pattern: 'yyyy-mm-dd' } } }, fields: 'userEnteredFormat.numberFormat' } });
+
+req.push(...statsRequests(2));
 
 const out = JSON.stringify({ requests: req });
 if (process.argv[2]) { fs.writeFileSync(process.argv[2], out); console.log(`Wrote ${req.length} requests (${out.length} bytes) to ${process.argv[2]}`); }

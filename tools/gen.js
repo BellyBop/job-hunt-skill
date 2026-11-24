@@ -23,7 +23,8 @@ const readUser = (f) => {
   return JSON.parse(fs.readFileSync(p, 'utf8'));
 };
 const R = readUser('resume.json');
-const P = readUser('profile.json');
+readUser('profile.json'); // exits with a setup hint if missing
+const P = require('./profile').load(); // fills in any settings an older profile is missing
 const CL = P.coverLetter || {};
 const PREFIX = P.filePrefix || R.name.toUpperCase().split(/\s+/).reverse().join('_').replace(/[^A-Z0-9_]/g, '');
 const FONT = 'Calibri';
@@ -77,6 +78,22 @@ function validate(job, i) {
     else { checkText(`${id}.bullets[${k}].label`, b[0], errs); checkText(`${id}.bullets[${k}].text`, b[1], errs); }
   });
   for (const k of ['availability', 'salutation', 'date']) if (job[k] !== undefined) checkText(`${id}.${k}`, job[k], errs);
+  // Optional ATS fields: keywords from the ad, the changes made for this ad, and reworded experience lines.
+  if (job.keywords !== undefined && (!Array.isArray(job.keywords) || job.keywords.some((k) => typeof k !== 'string' || !k.trim()))) errs.push(`${id}.keywords: must be a list of words or phrases from the ad`);
+  if (job.changes !== undefined) {
+    if (!Array.isArray(job.changes)) errs.push(`${id}.changes: must be a list of {what, why, evidence}`);
+    else job.changes.forEach((c, k) => {
+      for (const f of ['what', 'why', 'evidence']) if (!c || typeof c[f] !== 'string' || !c[f].trim()) errs.push(`${id}.changes[${k}].${f}: missing. Every change needs evidence from resume.json, or it must not be made`);
+    });
+  }
+  if (job.experience !== undefined) {
+    if (!RO.rewriteExperience) errs.push(`${id}.experience: rewording experience is switched off in profile.json (resumeOptimisation.rewriteExperience)`);
+    if (!Array.isArray(job.experience)) errs.push(`${id}.experience: must be a list of {index, text}`);
+    else job.experience.forEach((e, k) => {
+      if (!e || !Number.isInteger(e.index) || !R.experience[e.index]) errs.push(`${id}.experience[${k}].index: no experience entry ${e && e.index} in resume.json`);
+      checkText(`${id}.experience[${k}].text`, e && e.text, errs);
+    });
+  }
   const letterWords = words([job.opening, ...(job.bullets || []).flat(), job.drew].join(' '));
   if (letterWords > 400) errs.push(`${id}: cover letter body is ${letterWords} words, keep it under 400`);
   return errs;
@@ -89,6 +106,62 @@ function validateResumeJson() {
   return errs;
 }
 
+// ---------- ATS match ----------
+const RO = P.resumeOptimisation || {};
+const experienceText = (job, i) => {
+  const o = (job.experience || []).find((e) => e.index === i);
+  return o ? o.text : R.experience[i].text;
+};
+const norm = (s) => ' ' + String(s).toLowerCase().replace(/[^a-z0-9+#]+/g, ' ').replace(/\s+/g, ' ').trim() + ' ';
+const STOP = new Set('a an and are as at be by for from has have in into is it its of on or our that the their this to was were will with within your you i my me we us also across using used use work worked working role team teams able strong skills skill experience including ensure ensuring'.split(' '));
+
+function tailoredText(job) {
+  return [job.summary, ...job.skills, ...R.experience.map((e, i) => `${e.title} ${experienceText(job, i)}`),
+    ...R.education.map((e) => `${e.title} ${e.detail}`), ...(R.strengths || []).flat(), R.additional || ''].join(' ');
+}
+
+// Every fact the user has given: resume.json in full plus profile experience.
+const BASE = norm(JSON.stringify(R) + ' ' + (P.experience || ''));
+
+function matchReport(job) {
+  const text = norm(tailoredText(job));
+  const kws = (job.keywords || []).map((k) => k.trim());
+  const hit = kws.filter((k) => text.includes(norm(k)));
+  const missing = kws.filter((k) => !hit.includes(k));
+  const share = kws.length ? hit.length / kws.length : null;
+  // Names, tools, qualifications and acronyms in the tailored resume that appear nowhere in resume.json
+  // (e.g. "Azure", "ITIL", "365"): the user should confirm each one is true.
+  const tailored = [job.summary, ...job.skills, ...(job.experience || []).map((e) => e.text)].join(' ');
+  const claims = new Set();
+  for (const m of tailored.matchAll(/(^|[^.!?:]\s)([A-Z][A-Za-z0-9+#.]*[A-Za-z0-9+#]|[A-Za-z]*\d[A-Za-z0-9+#]*)/g)) claims.add(m[2]);
+  const unbacked = [...claims].filter((w) => {
+    const n = norm(w).trim();
+    return n.length > 1 && !STOP.has(n) && !BASE.includes(` ${n} `) && !BASE.includes(` ${n}s `) && !BASE.includes(` ${n.replace(/s$/, '')} `);
+  });
+  return { kws, hit, missing, share, unbacked };
+}
+
+function reportMarkdown(job, m) {
+  const target = RO.keywordTarget ?? 0.8;
+  const L = [`# Resume match: ${job.ref}`, ''];
+  if (m.share === null) L.push('No ad keywords were given, so the match wasn\'t checked.', '');
+  else {
+    L.push(`**Keyword match: ${m.hit.length}/${m.kws.length} (${Math.round(m.share * 100)}%)**${m.share < target ? `, below your ${Math.round(target * 100)}% target` : ''}`, '');
+    L.push('| Keyword from the ad | In resume |', '|---|---|', ...m.kws.map((k) => `| ${k} | ${m.hit.includes(k) ? 'yes' : '**no**'} |`), '');
+    if (m.missing.length) L.push(`Missing: ${m.missing.join(', ')}. Only add these if they're true for you; otherwise they're real gaps to mention honestly (or skip the role).`, '');
+  }
+  L.push('## Changes made for this ad', '');
+  if (!(job.changes || []).length) L.push('None recorded.', '');
+  else L.push('| Change | Why | Backed by (from your resume) |', '|---|---|---|', ...job.changes.map((c) => `| ${c.what} | ${c.why} | ${c.evidence} |`), '');
+  if ((job.experience || []).length) {
+    L.push('## Experience lines reworded', '');
+    for (const e of job.experience) L.push(`**${R.experience[e.index].title}**`, '', `- Before: ${R.experience[e.index].text}`, `- After: ${e.text}`, '');
+  }
+  L.push('## Check these are true', '');
+  L.push(m.unbacked.length ? `These words are in the tailored resume but not in your base resume: **${m.unbacked.join(', ')}**. Make sure each one honestly describes your experience, or remove it.` : 'Every word in the tailored summary, skills and experience appears in your base resume.', '');
+  return L.join('\n');
+}
+
 // ---------- documents ----------
 function resume(job) {
   const kids = [
@@ -98,10 +171,10 @@ function resume(job) {
     p(job.summary),
     heading('Employment Experience'),
   ];
-  for (const e of R.experience) {
+  R.experience.forEach((e, i) => {
     kids.push(p([run(e.title, true), run('  |  ' + e.dates)], { after: 40 }));
-    kids.push(p(e.text));
-  }
+    kids.push(p(experienceText(job, i)));
+  });
   kids.push(heading('Education and Training'));
   R.education.forEach((e, k) => kids.push(p([run(e.title, true), run(', ' + e.detail)], { after: k < R.education.length - 1 ? 60 : 120 })));
   kids.push(heading('Key Skills'));
@@ -200,6 +273,10 @@ function fail(errs) {
     fs.writeFileSync(path.join(outDir, `${PREFIX}_-_RESUME_-_${c}.docx`), await Packer.toBuffer(resume(job)));
     fs.writeFileSync(path.join(outDir, `${PREFIX}_-_COVERLETTER_-_${c}.docx`), await Packer.toBuffer(cover(job, date)));
     fs.writeFileSync(path.join(outDir, `${PREFIX}_-_COVERLETTER_-_${c}.txt`), plain(job));
-    console.log(`built ${c} (letter dated ${date})`);
+    const m = matchReport(job);
+    fs.writeFileSync(path.join(outDir, `MATCH_-_${c}.md`), reportMarkdown(job, m));
+    const kw = m.share === null ? 'no keywords given' : `keywords ${m.hit.length}/${m.kws.length} (${Math.round(m.share * 100)}%)${m.missing.length ? `, missing: ${m.missing.join(', ')}` : ''}`;
+    const chk = m.unbacked.length ? `; check: ${m.unbacked.join(', ')}` : '';
+    console.log(`built ${c} (letter dated ${date}; ${kw}${chk})`);
   }
 })().catch((e) => { console.error(e.message || e); process.exit(1); });

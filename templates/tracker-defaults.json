@@ -46,6 +46,9 @@
     ["linkedin_easy_apply_max", 5, "Per run"],
     ["indeed_connector_max_calls", 6, "Per run"],
     ["last_follow_up_check", "", "Gmail is scanned from this date on the next check (blank = last 14 days)"],
-    ["next_id", "=MAX(0,MAX(Jobs!A:A))+1", "Calculated. The ID to give the next new role"]
+    ["next_id", "=MAX(0,MAX(Jobs!A:A))+1", "Calculated. The ID to give the next new role"],
+    ["min_salary", 0, "Lowest yearly pay you'll consider, in dollars (0 = no minimum). Hourly and daily rates are converted to yearly"],
+    ["min_salary_action", "Flag", "Flag or Drop roles that advertise pay below min_salary"],
+    ["tracker_version", 2, "Set by the skill. Used to add new features to older trackers"]
   ]
 }

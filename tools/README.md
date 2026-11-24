@@ -1,42 +1,49 @@
 # Job hunt tools
 
-Reference for the scripts and the tracker. The skill itself is `.claude\skills\job-hunt\SKILL.md`; setup and everyday use are in the main `README.md`.
+Reference for the scripts and the tracker. The skill itself is `.claude/skills/job-hunt/SKILL.md`; setup and everyday use are in the main `README.md`.
 
 ## Folder layout
 
 ```
-<project>\
+<project>/
 ├─ README.md                      setup and everyday use
-├─ .claude\skills\job-hunt\SKILL.md   the instructions Claude follows
-├─ tools\
-│  ├─ gen.js                      builds resumes and cover letters
-│  ├─ tracker-setup.js            builds a new Job Hunt Tracker sheet
+├─ .claude/skills/job-hunt/SKILL.md   the instructions Claude follows
+├─ .githooks/pre-commit           runs the leak check before every commit
+├─ tools/
+│  ├─ gen.js                      builds resumes, cover letters and match reports
+│  ├─ tracker-setup.js            builds a new tracker sheet, or upgrades an old one
+│  ├─ profile.js                  adds new settings to older profiles
+│  ├─ leak-check.js               blocks personal details from being shared
 │  ├─ package.js                  makes a shareable zip
 │  └─ README.md                   this file
-├─ templates\                     blank starting files for a new user
+├─ templates/                     blank starting files for a new user
 │  ├─ resume.template.json
 │  ├─ profile.template.json
 │  ├─ cover-letter-example.template.md
 │  └─ tracker-defaults.json       default Auto-drop rules, Sources, Config
-├─ user\                          personal, never shared
+├─ user/                          personal, never shared
 │  ├─ resume.json                 base resume, the only copy
 │  ├─ profile.json                targets, flags, wording, sheet ID
 │  └─ cover-letter-example.md
-└─ applications-YYYY-MM-DD\       each day's tailored docs
+├─ applications-YYYY-MM-DD/       each day's tailored docs and MATCH_ reports
+└─ interviews/                    interview prep notes (personal)
 ```
+
+All commands use forward slashes and run from the project folder, so they work on Windows, Mac and Linux.
 
 ## The tracker (Google Sheet)
 
-Created during setup and linked by `spreadsheetId` in `user\profile.json`. Claude reads and writes it through the Google Sheets connector; there's no local copy.
+Created during setup and linked by `spreadsheetId` in `user/profile.json`. Claude reads and writes it through the Google Sheets connector; there's no local copy.
 
 Tabs:
 - **Jobs**: one row per role. The ID is permanent and is the number you use in "apply to 52". Status: Shortlisted / Applied / Skipped / Dropped / Expired. Stage (after applying): Awaiting reply, Acknowledged, Action needed, Assessment, Phone screen, Interview, Final interview, Offer, Rejected, Withdrawn, No reply (closed). Rows are coloured by stage and status. **Follow-up due** (column R) is a formula: Applied + follow_up_after_days.
 - **Follow-ups**: calculated live from Jobs: a summary line, then Action needed, In progress, Follow-up due (with days waiting) and Shortlist past expiry.
+- **Stats**: calculated live from Jobs: overview (roles seen, applied, replied, reply rate, progressed, interview rate, offers, rejected), roles found and applied for each of the last 8 weeks with a column chart, and applied / replied / progressed / reply rate by role group (Type) and by platform (Applied via). "Replied" means a real reply (action needed, assessment, interview, offer or rejection), not an automatic acknowledgement.
 - **Auto-drop**: screening rules. Set Enabled to N to switch one off, change Action between Drop and Flag, or add rows. Keywords are comma separated; any one matching triggers the rule. "Match in" is Title, Ad text, Company or Any.
 - **Sources**: where to search and apply. Enabled Y/N.
 - **Search terms**: keywords searched on each site, each tagged with a group from the profile. Enabled Y/N.
 - **Target companies**: employers whose careers pages are checked directly.
-- **Config**: locations, daily target, search window, expiry and follow-up days, per-run limits, last reply check, and next_id (a formula).
+- **Config**: locations, daily target, search window, expiry and follow-up days, per-run limits, last reply check, next_id (a formula), min_salary and min_salary_action (Flag or Drop), and tracker_version.
 
 Rules that keep the formulas working:
 - New rows are written to the next empty row (never appended or inserted). The formulas use whole-column references, so they survive anyway, but appended rows pick up the header's styling.
@@ -45,14 +52,17 @@ Rules that keep the formulas working:
 ### tracker-setup.js
 
 ```
-node tracker-setup.js <outFile>
+node tools/tracker-setup.js <outFile>                                   new tracker
+node tools/tracker-setup.js --upgrade <fromVersion> <outFile> [configSheetId]   upgrade an older one
 ```
 
-Writes `{"requests": [...]}` for one `update_spreadsheet` call on a brand-new blank spreadsheet (made with Drive `create_file`, mime type `application/vnd.google-apps.spreadsheet`, first tab sheetId 0). It builds every tab, header, formula, dropdown, colour and column width, using `templates\tracker-defaults.json` for the starting rules and `user\profile.json` for locale, timezone, the Type dropdown (the profile's group labels) and `level`. The `_levels` map in tracker-defaults.json lists the rules and sources that only start switched on for certain levels: "Senior title", the experience gates, "Students only" and the graduate boards for graduate and junior; "Too junior" for mid and senior; none of them for "any". Search terms, target companies and locations are filled in afterwards from the user's answers.
+**Upgrades.** The tracker's version is the `tracker_version` row in Config (missing means version 1). `--upgrade` writes only what that version is missing: version 1 → 2 adds the Stats tab and the min_salary, min_salary_action and tracker_version rows. Pass the Config tab's `sheetId` if it isn't 105 (trackers made by setup use 105). The skill runs this automatically at the start of a run. To add a feature in a future version, bump `TRACKER_VERSION`, add its default rows to `tracker-defaults.json`, and add a `from < N` block to the upgrade section.
+
+**New trackers.** Writes `{"requests": [...]}` for one `update_spreadsheet` call on a brand-new blank spreadsheet (made with Drive `create_file`, mime type `application/vnd.google-apps.spreadsheet`, first tab sheetId 0). It builds every tab, header, formula, dropdown, colour and column width, using `templates/tracker-defaults.json` for the starting rules and `user/profile.json` for locale, timezone, the Type dropdown (the profile's group labels) and `level`. The `_levels` map in tracker-defaults.json lists the rules and sources that only start switched on for certain levels: "Senior title", the experience gates, "Students only" and the graduate boards for graduate and junior; "Too junior" for mid and senior; none of them for "any". Search terms, target companies and locations are filled in afterwards from the user's answers.
 
 ## Doc generator (gen.js)
 
-Builds the tailored resume (.docx), cover letter (.docx) and plain-text cover letter for each role, from `user\resume.json`, `user\profile.json` and a jobs.json.
+Builds the tailored resume (.docx), cover letter (.docx) and plain-text cover letter for each role, from `user/resume.json`, `user/profile.json` and a jobs.json.
 
 ```
 node gen.js --check <jobs.json>                    validate only
@@ -61,7 +71,7 @@ node gen.js <jobs.json> <outDir> --only WSP,METSO  build some (use on the day yo
 node gen.js --base <outDir>                        build the untailored base resume
 ```
 
-- File names start with the profile's `filePrefix`, e.g. `SMITH_ALEX_-_RESUME_-_ACME.docx`.
+- File names start with the profile's `filePrefix`, e.g. `SURNAME_FIRSTNAME_-_RESUME_-_ACME.docx`.
 - The cover letter is dated **today in the profile's timezone**. Rebuild on the day of submission. A job can set `"date"` to override it.
 - The salutation, intro line, closing line and sign-off come from `coverLetter` in the profile.
 - Resume sections Strengths, Additional Elements and References are left out when empty in resume.json.
@@ -76,11 +86,42 @@ node gen.js --base <outDir>                        build the untailored base res
 - `availability` (optional): replaces the default availability line from resume.json
 - `salutation` (optional): replaces the profile's salutation
 - `date` (optional): overrides today's date on the letter
+- `keywords` (optional, recommended): the ad's 8 to 20 most important words and phrases, in the ad's wording
+- `changes` (optional, recommended): `[{what, why, evidence}]`, one per change made for this ad; `evidence` names the resume.json entry that backs it. Changes without evidence fail validation
+- `experience` (optional): `[{index, text}]` rewording experience entries for this ad (index into resume.json `experience`). Only allowed when `resumeOptimisation.rewriteExperience` is true in the profile
+
+### Match report
+
+For each role, `MATCH_-_<FILECOMPANY>.md` is written next to the docs, and a one-line summary is printed:
+- **Keyword match**: how many of `keywords` appear in the tailored resume, which are missing, and whether that's below the profile's `resumeOptimisation.keywordTarget` (default 80%).
+- **Changes made**: the `changes` table with evidence.
+- **Experience lines reworded**: each original and reworded line.
+- **Check these are true**: names, tools, qualifications and acronyms (capitalised words or words with digits, e.g. Azure, ITIL, 365) in the tailored summary, skills or experience that appear nowhere in resume.json. Each must be backed by the resume or removed.
+
+## Profile upgrades (profile.js)
+
+```
+node tools/profile.js check      list settings an older profile is missing
+node tools/profile.js upgrade    add them with their defaults, and save
+```
+
+The profile's version is `profileVersion`. `upgrade` runs any conversion steps for versions above it, copies in every setting from `templates/profile.template.json` that the profile doesn't have (never placeholders like name, file prefix, sheet ID, targets or screening), and sets the current version. gen.js loads profiles the same way in memory, so an old profile never breaks a build. The skill runs `upgrade` at the start of every run.
+
+To add a setting: add it with a sensible default to the template, bump `PROFILE_VERSION` in profile.js and `profileVersion` in the template, and add a `MIGRATIONS` step only if an old value needs converting.
+
+## Leak check (leak-check.js and the git hook)
+
+```
+node tools/leak-check.js --staged    check files staged for commit
+node tools/leak-check.js <folder>    check every file in a folder
+```
+
+Looks for the name, email, phone, address, LinkedIn URL, file prefix and sheet ID from `user/profile.json` and `user/resume.json`, and blocks any file inside `user/`, `applications-*/`, `archive/` or `interviews/`. `.githooks/pre-commit` runs it before every commit once `git config core.hooksPath .githooks` is set (setup does this). package.js runs it on the zip contents.
 
 ## Sharing (package.js)
 
 ```
-node tools\package.js
+node tools/package.js
 ```
 
-Copies the skill, tools, templates and READMEs into `dist\job-hunt-skill\` and zips them to `dist\job-hunt-skill.zip`. It leaves out `user\`, `applications-*`, `archive\` and `node_modules\`, and refuses to build the zip if any copied file contains your name, email, phone, file prefix or sheet ID.
+Copies the skill, tools, templates and READMEs into `dist/job-hunt-skill/` and zips them to `dist/job-hunt-skill.zip`. It leaves out `user/`, `applications-*`, `archive/`, `interviews/` and `node_modules/`, and runs the leak check on the copied files, refusing to build the zip if it finds anything personal. On Windows it uses the built-in `tar.exe` (forward-slash paths, so the zip opens properly on a Mac); elsewhere it uses `zip`.

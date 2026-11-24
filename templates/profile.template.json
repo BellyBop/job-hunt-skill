@@ -1,5 +1,6 @@
 {
   "_note": "Your job hunt settings. The skill reads this every run. Setup ('set up job hunt') writes it; edit it any time. Search terms, sources, auto-drop rules and locations live in the Google Sheet instead.",
+  "profileVersion": 2,
   "name": "Full Name",
   "filePrefix": "SURNAME_FIRSTNAME",
   "timezone": "Australia/Sydney",
@@ -35,6 +36,17 @@
     "emailRule": "Never state a start date or notice period in contact emails."
   },
   "contactEmails": true,
+  "contactEmailOptions": {
+    "namedContacts": true,
+    "genericInbox": true,
+    "maxNamedContacts": 2,
+    "_note": "namedContacts: also find named HR or recruiting people with a published email. genericInbox: also include the company's published jobs, HR or general inbox."
+  },
+  "resumeOptimisation": {
+    "rewriteExperience": true,
+    "keywordTarget": 0.8,
+    "_note": "rewriteExperience: allow rewording experience lines to match the ad (only using facts already in resume.json). keywordTarget: share of the ad's key terms the resume should cover before it's flagged."
+  },
   "coverLetter": {
     "salutation": "Dear Hiring Manager,",
     "intro": "Here is what caught my eye about your job posting and how I think my experience can benefit your team:",

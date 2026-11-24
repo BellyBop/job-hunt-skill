@@ -6,3 +6,6 @@ archive/
 # Build output and dependencies
 dist/
 tools/node_modules/
+
+# Interview prep notes
+interviews/

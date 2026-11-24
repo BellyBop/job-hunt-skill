@@ -19,6 +19,10 @@ const FILES = [
   'tools/gen.js',
   'tools/tracker-setup.js',
   'tools/package.js',
+  'tools/leak-check.js',
+  'tools/profile.js',
+  '.githooks/pre-commit',
+  '.gitattributes',
   'tools/package.json',
   'tools/package-lock.json',
   'tools/README.md',
@@ -37,18 +41,8 @@ for (const f of FILES) {
   fs.copyFileSync(src, dst);
 }
 
-// Safety net: refuse to package anything that looks like it came from user/.
-const leaks = [];
-const profile = path.join(ROOT, 'user', 'profile.json');
-if (fs.existsSync(profile)) {
-  const p = JSON.parse(fs.readFileSync(profile, 'utf8'));
-  const r = JSON.parse(fs.readFileSync(path.join(ROOT, 'user', 'resume.json'), 'utf8'));
-  const needles = [p.spreadsheetId, p.filePrefix, r.email, r.phone, r.name].filter((s) => s && s.length > 4);
-  for (const f of FILES) {
-    const text = fs.readFileSync(path.join(OUT, f), 'utf8');
-    for (const n of needles) if (text.includes(n)) leaks.push(`${f} contains "${n}"`);
-  }
-}
+// Safety net: refuse to package anything personal.
+const leaks = require('./leak-check').run(OUT);
 if (leaks.length) {
   fs.rmSync(DIST, { recursive: true, force: true });
   console.error('NOT PACKAGED. Personal details found:\n  ' + leaks.join('\n  '));
