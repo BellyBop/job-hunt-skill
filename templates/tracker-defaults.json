@@ -76,7 +76,13 @@
     ["Disability or adjustments needed (voluntary)", "", "Your answer, Prefer not to say, or Ask me", "Diversity (voluntary)"],
     ["Culturally diverse background (voluntary)", "", "Your answer, Prefer not to say, or Ask me", "Diversity (voluntary)"],
     ["How did you hear about this role", "The site the role was found on", "Filled in per role", "Other"],
-    ["Consent to be contacted about future roles", "", "Yes or No", "Other"]
+    ["Consent to be contacted about future roles", "", "Yes or No", "Other"],
+    ["Academic results / grade average", "", "e.g. Credit average (65-74%). Graduate programs often ask", "Background"],
+    ["Academic transcript file", "", "Path to a PDF copy on this computer (e.g. user/transcript.pdf), attached when an application asks for it", "Background"],
+    ["Age range", "", "Some forms ask an age band, e.g. Up to 24, 25 to 34, or Prefer not to say", "Personal"],
+    ["Served in the Australian Defence Force", "", "Yes or No (government forms ask)", "Background"],
+    ["Received a government redundancy in the last 12 months", "", "Yes or No (government forms ask)", "Background"],
+    ["Previously worked for the employer", "No, unless noted on the role", "Answered per role", "Background"]
   ],
   "Config": [
     ["locations", "", "Where to search (filled in at setup)"],
@@ -90,7 +96,9 @@
     ["next_id", "=MAX(0,MAX(Jobs!A:A))+1", "Calculated. The ID to give the next new role"],
     ["min_salary", 0, "Lowest yearly pay you'll consider, in dollars (0 = no minimum). Hourly and daily rates are converted to yearly"],
     ["min_salary_action", "Flag", "Flag or Drop roles that advertise pay below min_salary"],
-    ["tracker_version", 5, "Set by the skill. Used to add new features to older trackers"],
-    ["account_passwords", "Chrome suggests", "For account sign-ups: Chrome suggests (you click Use suggested password and Chrome saves it) or I type it. Claude never types or sees passwords"]
+    ["tracker_version", 6, "Set by the skill. Used to add new features to older trackers"],
+    ["account_passwords", "Chrome suggests", "For account sign-ups: Chrome suggests (you click Use suggested password and Chrome saves it) or I type it. Claude never types or sees passwords"],
+    ["auto_agree_terms", "Yes", "Yes: privacy statements and terms a form requires before you can apply are agreed without asking (listed in the overview). Optional marketing boxes stay unticked. No: ask each time"],
+    ["account_creation", "Create", "Create: make accounts on application sites from your Form answers without asking (you still set the password and click any verification link). Ask: ask per site"]
   ]
 }

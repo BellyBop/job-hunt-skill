@@ -5,7 +5,7 @@
 //   node tracker-setup.js <outFile> --part 2      second call: Stats tab and the easier-to-read layout
 //   node tracker-setup.js <outFile> --part 3      third call: extra Stats charts, Read me tab, heading notes
 //   node tracker-setup.js <outFile>               all three in one batch (large; prefer the parts)
-//   node tracker-setup.js --upgrade <fromVersion> <outFile> --config-row <firstEmptyConfigRow> [--meta <sheets.json>]
+//   node tracker-setup.js --upgrade <fromVersion> <outFile> --config-row <firstEmptyConfigRow> [--form-row <firstEmptyFormAnswersRow>] [--meta <sheets.json>]
 //     --config-row: 1-based row after the last filled row of Config!A:A, so new settings never overwrite the user's rows
 //     --meta: saved get_spreadsheet result (fields sheets.properties) for trackers whose tab IDs aren't the setup defaults
 //
@@ -93,9 +93,14 @@ const FOLLOW = [
   ],
 ];
 
-const TRACKER_VERSION = 5;
+const TRACKER_VERSION = 6;
 const FORM_ID = 779;
-const passwordDropdown = (configId, rowIndex) => ({ setDataValidation: { range: range(configId, rowIndex, rowIndex + 1, 1, 2), rule: { condition: { type: 'ONE_OF_LIST', values: [{ userEnteredValue: 'Chrome suggests' }, { userEnteredValue: 'I type it' }] }, strict: true, showCustomUi: true } } });
+const configDropdown = (configId, rowIndex, options) => ({ setDataValidation: { range: range(configId, rowIndex, rowIndex + 1, 1, 2), rule: { condition: { type: 'ONE_OF_LIST', values: options.map((v) => ({ userEnteredValue: v })) }, strict: true, showCustomUi: true } } });
+const passwordDropdown = (configId, rowIndex) => configDropdown(configId, rowIndex, ['Chrome suggests', 'I type it']);
+// v6 Config settings that speed up applying, with their dropdown options.
+const V6_CONFIG = { auto_agree_terms: ['Yes', 'No'], account_creation: ['Create', 'Ask'] };
+// Form answers rows added in v6 (they come after the 39 v5 rows in tracker-defaults.json).
+const V5_FORM_ROWS = 39;
 
 // v5: a "Form answers" tab: standard answers for application forms and account sign-ups, which the user can
 // edit or add to. Never holds passwords.
@@ -421,6 +426,18 @@ if (process.argv[2] === '--upgrade') {
     const pwRow = nextRow - 1 + (from < 2 ? 3 : 0);
     up.push(writeRows(ids.Config, D.Config.filter((row) => row[0] === 'account_passwords'), pwRow), passwordDropdown(ids.Config, pwRow));
   }
+  if (from < 6) {
+    // v6 Config rows, below any rows this upgrade already added.
+    const row = nextRow - 1 + (from < 2 ? 3 : 0) + (from < 5 ? 1 : 0);
+    const keys = Object.keys(V6_CONFIG);
+    up.push(writeRows(ids.Config, keys.map((k) => D.Config.find((r) => r[0] === k)), row));
+    keys.forEach((k, i) => up.push(configDropdown(ids.Config, row + i, V6_CONFIG[k])));
+    // v6 Form answers rows. A tab made by this same upgrade (from < 5) already has them.
+    if (from === 5) {
+      const formRow = Number(flag('--form-row') || V5_FORM_ROWS + 2);
+      up.push(writeRows(ids['Form answers'] ?? FORM_ID, D['Form answers'].slice(V5_FORM_ROWS), formRow - 1));
+    }
+  }
   // Trackers that already have a tracker_version row (v2 and later) get it updated by the skill, not here.
   const o = JSON.stringify({ requests: up });
   if (outFile) { fs.writeFileSync(outFile, o); console.log(`Wrote ${up.length} upgrade requests (${o.length} bytes) to ${outFile}`); } else console.log(o);
@@ -484,6 +501,7 @@ req.push(dropdown(ID['Auto-drop'], 2, ['Title', 'Ad text', 'Company', 'Any']), d
 req.push(dropdown(ID['Search terms'], 2, TYPES, false));
 const lastCheckRow = D.Config.findIndex((r) => r[0] === 'last_follow_up_check') + 1;
 req.push(passwordDropdown(ID.Config, D.Config.findIndex((r) => r[0] === 'account_passwords') + 1));
+for (const [k, opts] of Object.entries(V6_CONFIG)) req.push(configDropdown(ID.Config, D.Config.findIndex((r) => r[0] === k) + 1, opts));
 req.push({ repeatCell: { range: range(ID.Config, lastCheckRow, lastCheckRow + 1, 1, 2), cell: { userEnteredFormat: { numberFormat: { type: 'DATE', pattern: 'yyyy-mm-dd' } } }, fields: 'userEnteredFormat.numberFormat' } });
 
 // Sent as three calls so no batch is too big to send reliably: tabs and formulas, then Stats and layout, then extras.

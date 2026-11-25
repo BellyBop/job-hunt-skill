@@ -8,6 +8,7 @@ Reference for the scripts and the tracker. The skill itself is `.claude/skills/j
 <project>/
 ├─ README.md                      setup and everyday use
 ├─ .claude/skills/job-hunt/SKILL.md   the instructions Claude follows
+├─ .claude/skills/job-hunt/site-playbooks.md   how each application system behaves (Claude adds to it)
 ├─ .githooks/pre-commit           runs the leak check before every commit
 ├─ tools/
 │  ├─ gen.js                      builds resumes, cover letters and match reports
@@ -45,7 +46,7 @@ Tabs:
 - **Sources**: where to search and apply. Enabled Y/N.
 - **Search terms**: keywords searched on each site, each tagged with a group from the profile. Enabled Y/N.
 - **Target companies**: employers whose careers pages are checked directly.
-- **Config**: locations, daily target, search window, expiry and follow-up days, per-run limits, last reply check, next_id (a formula), min_salary and min_salary_action (Flag or Drop), tracker_version, and account_passwords ("Chrome suggests" or "I type it": how passwords are set when a site needs a new account; Claude never types or sees them).
+- **Config**: locations, daily target, search window, expiry and follow-up days, per-run limits, last reply check, next_id (a formula), min_salary and min_salary_action (Flag or Drop), tracker_version, account_passwords ("Chrome suggests" or "I type it": how passwords are set when a site needs a new account; Claude never types or sees them), auto_agree_terms (Yes or No) and account_creation (Create or Ask).
 
 Rules that keep the formulas working:
 - New rows are written to the next empty row (never appended or inserted). The formulas use whole-column references, so they survive anyway, but appended rows pick up the header's styling.
@@ -55,7 +56,7 @@ Rules that keep the formulas working:
 
 ```
 node tools/tracker-setup.js <outFile> --part 1|2|3                       new tracker, sent as three calls in order
-node tools/tracker-setup.js --upgrade <fromVersion> <outFile> --config-row <firstEmptyConfigRow> [--meta <sheets.json>]   upgrade an older one
+node tools/tracker-setup.js --upgrade <fromVersion> <outFile> --config-row <firstEmptyConfigRow> [--form-row <firstEmptyFormAnswersRow>] [--meta <sheets.json>]   upgrade an older one
 ```
 
 **Upgrades.** The tracker's version is the `tracker_version` row in Config (missing means version 1). `--upgrade` writes only what that version is missing:
@@ -63,6 +64,7 @@ node tools/tracker-setup.js --upgrade <fromVersion> <outFile> --config-row <firs
 - 2 → 3: the easier-to-read layout. On Jobs: four saved filter views (Active, To decide, Applications, Everything, newest first), no text spilling into the next cell, 24px rows, short dates ("24 Nov 26"), ID, Company and Role frozen, light row lines, and Contact, Contact email and Last update folded into collapsed column groups. On the settings tabs: long text wraps.
 - 3 → 4: a **Read me** tab first (every tab, status, stage and row colour explained), hover notes on every column heading of Jobs and the settings tabs, and seven more Stats charts (pipeline, status, where applications stand, fit, reply rate by role group, applications and replies by platform, applications over time). Their data lives in a "Chart data" block at `Stats!A64:N76`. It also rewrites the group and platform table formulas so they only look at rows 5 to 62.
 - 4 → 5: the **Form answers** tab (fields only; the skill fills the answers from the resume and profile) and the account_passwords Config row with its dropdown (written at `--config-row`).
+- 5 → 6: the auto_agree_terms and account_creation Config rows with dropdowns (below any rows the upgrade adds), and six Form answers rows (grade average, transcript file, age range, ADF service, government redundancy, previously worked for the employer) written at `--form-row`, the first empty row of Form answers (default row 41).
 
 `--meta` is a saved `get_spreadsheet` result (fields `sheets.properties`); it maps tab titles to their sheetIds, which differ on trackers that weren't made by setup. Without it the setup IDs are used (Jobs 0, Config 105 and so on). After an upgrade from version 2 or later, the skill sets the existing tracker_version cell to the new version. The skill runs this automatically at the start of a run. To add a feature in a future version, bump `TRACKER_VERSION`, add its default rows to `tracker-defaults.json`, and add a `from < N` block to the upgrade section.
 

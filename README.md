@@ -52,14 +52,25 @@ The first tab, **Read me**, explains every tab, status, stage and row colour, an
 - **Form answers**: your standard answers for application forms and account sign-ups (contact details, street address, right to work, notice period, salary expectation, licences, referees, voluntary diversity questions). Claude fills forms from it and only asks you about blank fields or ones you've marked "Ask me", then offers to save your reply here. Edit it any time. Passwords never go here.
 - **Auto-drop**: your screening rules. Turn them on or off, switch between Drop and Flag, add keywords.
 - **Sources**, **Search terms**, **Target companies**: where and what to search. Turn rows on or off.
-- **Config**: locations, daily target, follow-up days, per-run limits, and **min_salary** (the lowest yearly pay you'll consider; roles below it are flagged or dropped, your choice), and **account_passwords** (see below).
+- **Config**: locations, daily target, follow-up days, per-run limits, and **min_salary** (the lowest yearly pay you'll consider; roles below it are flagged or dropped, your choice), **account_passwords**, **auto_agree_terms** and **account_creation** (see below).
 
 ### Sites that need an account
-Workday, PageUp, iCIMS and many government and company sites make you create an account before you can apply. Claude asks before creating one, fills in the sign-up form from your Form answers tab, and then, depending on **account_passwords** in Config:
+Workday, PageUp, iCIMS and many government and company sites make you create an account before you can apply. With **account_creation** set to Create (the default), Claude makes the account without asking (set it to Ask to be asked per site), using a no-account route when the site offers one. It fills in the sign-up form from your Form answers tab, and then, depending on **account_passwords** in Config:
 - **Chrome suggests** (default): Claude clicks into the password box and you click Chrome's **Use suggested password**. Chrome makes a strong password and saves it to your Google Password Manager.
 - **I type it**: you type the password yourself.
 
 Claude never types, sees or stores your passwords, and you click any verification email or code. The site is noted on the role so the next application there is just a sign-in.
+
+With **auto_agree_terms** set to Yes (the default), privacy statements and terms that a form requires before you can apply are agreed without asking. Optional marketing boxes stay unticked, and every overview lists what was agreed.
+
+### How applying stays fast
+- **One batch.** Say "apply to 67, 70, 71" and Claude rebuilds all the docs at once, opens every application in its own tab, and fills each as far as it can.
+- **One round of questions.** Anything only you can do (a missing answer, a password, a CAPTCHA, a transcript) comes in a single message, and answers are saved to Form answers so you're not asked again.
+- **One set of overviews.** Reply once, e.g. "accept 67, 76".
+- **Site playbooks.** `.claude/skills/job-hunt/site-playbooks.md` records how each system behaves (Workday, PageUp, Dayforce, Cornerstone, iCIMS, Lever, SEEK...), and Claude adds to it as it learns.
+- **Background work.** Tailored docs for a search are written by several helpers at once, and hiring contacts are researched in the background while forms are filled.
+- **Effort tags.** The search list marks each role 🟢 quick, 🟡 needs an account, or 🔴 needs extras from you, so you know which to pick when you're short on time.
+- If you submit one yourself, just say so and it's logged as Applied.
 
 Don't sort the Jobs tab in place, delete its rows, or type in Follow-up due, Follow-ups or Stats. Use the filter buttons instead.
 

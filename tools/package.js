@@ -16,6 +16,7 @@ const FILES = [
   'README.md',
   '.gitignore',
   '.claude/skills/job-hunt/SKILL.md',
+  '.claude/skills/job-hunt/site-playbooks.md',
   'tools/gen.js',
   'tools/tracker-setup.js',
   'tools/package.js',
